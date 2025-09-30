@@ -9,8 +9,8 @@ CORS(app)
 # Conexión a Mongo Atlas
 MONGO_URI = os.environ.get("MONGO_URI")  # Configura en Render
 client = MongoClient(MONGO_URI)
-db = client.smartparking
-collection = db.admin_positions
+db = client["smart_parking_web"]
+collection = db["admin_positions"]
 
 # Guardar posiciones
 @app.route("/api/admin/save-positions", methods=["POST"])
