@@ -1,3 +1,8 @@
+
+
+
+
+# app.py
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pymongo import MongoClient
@@ -6,29 +11,37 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# Conexión a Mongo Atlas
-MONGO_URI = os.environ.get("MONGO_URI")  # Configura en Render
+# --- Configuración de MongoDB Atlas ---
+# REEMPLAZA con tu URI de Mongo Atlas
+MONGO_URI = os.environ.get("MONGO_URI")
 client = MongoClient(MONGO_URI)
 db = client["smart_parking_web"]
 collection = db["admin_positions"]
 
-# Guardar posiciones
+# --- Guardar posiciones (POST) ---
 @app.route("/api/admin/save-positions", methods=["POST"])
 def save_positions():
-    data = request.json
-    if not data.get("positions"):
-        return jsonify({"error": "No se recibieron posiciones"}), 400
+    try:
+        data = request.json
+        if not isinstance(data, list):
+            return jsonify({"error": "Formato inválido, se esperaba una lista"}), 400
+        # Limpiamos la colección y guardamos nuevas posiciones
+        collection.delete_many({})
+        collection.insert_many(data)
+        return jsonify({"success": True}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-    # Limpiar colección antes de guardar
-    collection.delete_many({})
-    collection.insert_one({"positions": data["positions"]})
-    return jsonify({"ok": True})
-
-# Obtener posiciones
+# --- Obtener posiciones (GET) ---
 @app.route("/api/admin/get-positions", methods=["GET"])
 def get_positions():
-    doc = collection.find_one()
-    return jsonify(doc if doc else {"positions": []})
+    try:
+        docs = list(collection.find({}, {"_id": 0}))
+        return jsonify(docs), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
+# --- Ejecutar ---
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
