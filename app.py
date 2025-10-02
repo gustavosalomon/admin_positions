@@ -1,47 +1,53 @@
-
-
-
-
-# app.py
+import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pymongo import MongoClient
-import os
 
 app = Flask(__name__)
 CORS(app)
 
-# --- Configuración de MongoDB Atlas ---
-# REEMPLAZA con tu URI de Mongo Atlas
-MONGO_URI = os.environ.get("MONGO_URI")
+MONGO_URI = os.getenv("MONGO_URI")
+if not MONGO_URI:
+    raise RuntimeError("❌ Falta definir la variable de entorno MONGO_URI en Render")
+
 client = MongoClient(MONGO_URI)
 db = client["smart_parking_web"]
-collection = db["admin_positions"]
+col = db["admin_positions"]
 
-# --- Guardar posiciones (POST) ---
-@app.route("/api/admin/save-positions", methods=["POST"])
-def save_positions():
-    try:
-        data = request.json
-        if not isinstance(data, list):
-            return jsonify({"error": "Formato inválido, se esperaba una lista"}), 400
-        # Limpiamos la colección y guardamos nuevas posiciones
-        collection.delete_many({})
-        collection.insert_many(data)
-        return jsonify({"success": True}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({"message": "🛠️ Admin Positions API funcionando correctamente"})
 
-# --- Obtener posiciones (GET) ---
+# Obtener todas las posiciones
 @app.route("/api/admin/get-positions", methods=["GET"])
 def get_positions():
-    try:
-        docs = list(collection.find({}, {"_id": 0}))
-        return jsonify(docs), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    positions = list(col.find({}, {"_id": 0}))  # Excluir _id para evitar conflictos en el cliente
+    return jsonify(positions)
 
-# --- Ejecutar ---
+# Guardar múltiples posiciones (actualiza si ya existen por id + collection)
+@app.route("/api/admin/save-positions", methods=["POST"])
+def save_positions():
+    data = request.get_json()
+    if not isinstance(data, list):
+        return jsonify({"success": False, "error": "Formato inválido: se esperaba una lista"}), 400
+
+    for pos in data:
+        if not all(k in pos for k in ("id", "lat", "lng", "collection")):
+            return jsonify({"success": False, "error": "Faltan campos en algunas posiciones"}), 400
+        
+        # Buscar y actualizar por combinación única: id + collection
+        col.update_one(
+            {"id": pos["id"], "collection": pos["collection"]},
+            {"$set": {
+                "nombre": pos.get("nombre", pos["id"]),
+                "lat": pos["lat"],
+                "lng": pos["lng"]
+            }},
+            upsert=True
+        )
+
+    return jsonify({"success": True})
+
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=5000)
+
