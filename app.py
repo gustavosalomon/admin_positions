@@ -16,7 +16,7 @@ CORS(app)
 MONGO_URI = os.environ.get("MONGO_URI")
 client = MongoClient(MONGO_URI)
 db = client["smart_parking_web"]
-collection = db["polygons"]
+collection = db["admin_positions"]
 
 # --- Guardar posiciones (POST) ---
 @app.route("/api/admin/save-positions", methods=["POST"])
